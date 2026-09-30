@@ -268,7 +268,8 @@ for rep in range(num_repeats):
               f'onset={onset_time:.3f}, offset={offset_time:.3f}')
 
 with open(timestamp_file, "w", newline="") as csvfile:
-    writer = csv.writer(csvfile)
+    writer = csv.DictWriter(csvfile, fieldnames=list(frame_data[0].keys()))
+    writer.writeheader()
     writer.writerows(frame_data)
 
 if save_frames and recorded_frames:

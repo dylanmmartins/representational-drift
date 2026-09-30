@@ -1,4 +1,6 @@
 
+import os
+import fnmatch
 import h5py
 import datetime
 import numpy as np
@@ -122,3 +124,35 @@ def read_h5(filename, aslist=False):
             out = outl
 
         return out
+
+
+def find(pattern, path, MR=False, retempty=False):
+    """ Recursively glob for files under `path` matching `pattern`.
+
+    Parameters
+    ----------
+    pattern : str
+        fnmatch-style pattern, e.g. '*sparsenoise.csv'.
+    path : str
+        Directory to search, including subdirectories.
+    MR : bool
+        If True, return only the most recently modified match (as a str).
+        Otherwise return a list of all matches.
+    retempty : bool
+        If True, return None instead of raising when nothing matches.
+    """
+
+    result = []
+    for root, _, files in os.walk(path):
+        for name in files:
+            if fnmatch.fnmatch(name, pattern):
+                result.append(os.path.join(root, name))
+
+    if len(result) == 0:
+        if retempty:
+            return None
+        raise FileNotFoundError('Found no file(s) matching key {} in directory {}'.format(pattern, path))
+
+    if MR:
+        return max(result, key=os.path.getmtime)
+    return result
