@@ -1,19 +1,15 @@
+# -*- coding: utf-8 -*-
 """
-Play a natural-movie stimulus (as saved by make_movie_stacks.ipynb) in PsychoPy
-at its native 30 Hz frame rate, and fire a single TTL pulse on an Arduino
-(running StandardFirmata) at stimulus onset to trigger microscope acquisition.
+Present natural movie stimulus. This can present three movies:
+antelopes, penguins, and meerkats. Run in Psychopy's own
+python.exe terminal. Run with:
 
-Requires:
-    pip install psychopy pyfirmata2
+    python show_movie.py --movie A
 
-Hardware:
-    - Arduino loaded with the "StandardFirmata" sketch (File > Examples >
-      Firmata > StandardFirmata in the Arduino IDE).
-    - TRIGGER_PIN wired to the microscope's external-trigger input, with a
-      shared ground between the Arduino and the microscope's trigger board.
+For the `--movie` flag, options are A, P, and M (for each 
+animal video).
 
-Usage:
-    python play_stimulus_with_trigger.py natural_movie_one.tif --repeats 10
+DMM, Sept 2026
 """
 
 import argparse
@@ -28,19 +24,16 @@ from psychopy import core, event, visual
 
 from pyfirmata2 import Arduino
 
-# ----------------------------------------------------------------------
-# Config (override via CLI flags below)
-# ----------------------------------------------------------------------
-STIM_FPS = 30.0            # native frame rate of the Allen natural-movie stimuli
-TRIGGER_PIN = 8             # Arduino digital pin wired to the microscope trigger
-PULSE_DURATION = 0.005       # seconds the trigger line is held HIGH
-SERIAL_PORT = 'COM9'   # Arduino.AUTODETECT  # or e.g. '/dev/ttyACM0' / 'COM3'
+
+STIM_FPS = 30.0
+TRIGGER_PIN = 8
+PULSE_DURATION = 0.005
+SERIAL_PORT = 'COM9'
+SEED = 0 # this shouldnt matter or be used anywhere... just here out of caution
 
 
 def to_contrast(frame):
-    """uint8 [0,255] -> float32 [-1,1] for psychopy's default rgb colorSpace."""
     return frame.astype(np.float32) / 127.5 - 1.0
-
 
 def send_trigger_pulse(pin, duration):
     pin.write(1)
@@ -60,7 +53,12 @@ def main():
     parser.add_argument("--windowed", action="store_true", default=False, help="Run in a window instead of fullscreen")
     parser.add_argument("--log", type=str, default=None, help="CSV path to log per-frame flip timestamps")
     parser.add_argument("--startF", type=int, default=-1, help="Frame index to start playback from")
+    parser.add_argument("--seed", type=int, default=SEED, help="Random seed")
+    parser.add_argument("--no-wait", action="store_true", default=False,
+                        help="Start immediately instead of waiting for SPACE after arming the microscope")
     args = parser.parse_args()
+
+    np.random.seed(args.seed)
 
     startF = args.startF
     if args.movie == 'M':
@@ -89,6 +87,7 @@ def main():
         movie_path = 'C:/Users/Goard Lab/Desktop/DMM/repdrift_stim/penguins.tif'
     elif args.movie == 'A':
         movie_path = 'C:/Users/Goard Lab/Desktop/DMM/repdrift_stim/antelopes.tif'
+
     print(f"Loading stimulus stack: {movie_path}")
     stack = tifffile.memmap(movie_path)
     print(stack.shape)
@@ -96,6 +95,15 @@ def main():
     stack = stack[startF:, :, :]
     n_frames, height, width = stack.shape
     print(f"  {n_frames} frames, {width}x{height}, {args.repeats} repeat")
+
+    print(f"Connecting to Arduino ({args.port if args.port != Arduino.AUTODETECT else 'autodetect'})...")
+    try:
+        board = Arduino(args.port)
+    except Exception as exc:
+        sys.exit(f"Could not connect to Arduino: {exc}")
+    trigger_pin = board.get_pin(f"d:{args.pin}:o")
+    trigger_pin.write(0)
+    print(f"Connected. Trigger on pin {args.pin}, {args.pulse_duration * 1000:.1f} msec pulse.")
 
     win = visual.Window(
         fullscr=not args.windowed,
@@ -106,47 +114,46 @@ def main():
     )
     win.mouseVisible = False
 
-    print("Measuring actual monitor frame rate...")
+    print("Measuring actual frame rate of monitor...")
     measured_fps = win.getActualFrameRate(nIdentical=10, nMaxFrames=100, nWarmUpFrames=10, threshold=1)
     if measured_fps is None:
-        print("  Could not measure frame rate reliably, falling back to reported nominal rate.")
+        print('Couldnt measure frame rate so falling back to nominal rate.')
         measured_fps = win.monitorFramePeriod and (1.0 / win.monitorFramePeriod)
+        print('Using {:.2f} Hz'.format(measured_fps))
+
     if not measured_fps:
         win.close()
-        sys.exit("Could not determine monitor frame rate; aborting.")
+        board.exit()
+        raise RuntimeError('Couldnt find any monitor rate, so aborting. Might be a problem with psychopy install?')
 
     frames_per_stim_frame = max(1, round(measured_fps / STIM_FPS))
-    print(f"  Monitor: {measured_fps:.2f} Hz -> holding each stimulus frame for {frames_per_stim_frame} refresh(es)")
+    print(f"Monitor is {measured_fps:.2f} Hz, and holding each stimulus frame for {frames_per_stim_frame} refreshes")
     print(f'Expected duration of complete presentation (one repeat): {n_frames * frames_per_stim_frame / measured_fps:.2f} s')
-    print('Each frame lasts {:.2f} ms'.format(1000 * frames_per_stim_frame / measured_fps))
+    print('each frame lasts {:.2f} ms'.format(1000 * frames_per_stim_frame / measured_fps))
     print('Full presentation of {} repeats will last {:.2f} min'.format(args.repeats, (args.repeats * n_frames * frames_per_stim_frame / measured_fps) / 60.))
 
     img = visual.ImageStim(win, size=(2.,2.), units="norm")
     img.flipVert = True
 
-    # one row per movie frame: [repeat, movie_frame, onset_s, offset_s]
-    # movie_frame indexes the original .tif; onset/offset are seconds since the trigger pulse
     log_rows = []
 
     img.image = to_contrast(stack[0])
 
-    # Connect to Arduino and send a TTL pulse at stimulus onset
-    print(f"Connecting to Arduino ({args.port if args.port != Arduino.AUTODETECT else 'autodetect'})...")
-    try:
-        board = Arduino(args.port)
-    except Exception as exc:
-        win.close()
-        sys.exit(f"Could not connect to Arduino: {exc}")
-    trigger_pin = board.get_pin(f"d:{args.pin}:o")
-    trigger_pin.write(1)
-    print(f"  Connected. Trigger on pin {args.pin}, {args.pulse_duration * 1000:.1f} ms pulse.")
+    win.flip()
+    start_keys = []
+    if not args.no_wait:
+        print('\n>>> Ready. Start microscope with it set to wait for input trigger. Then press SPACE '
+            'while inside of stimulus window on this computer. Hit ESC to abort.')
+        start_keys = event.waitKeys(keyList=["space", "escape"])
 
-    print("Sending start trigger to microscope...")
-    send_trigger_pulse(trigger_pin, args.pulse_duration)
-
-    history_clock = core.MonotonicClock()
+    history_clock = core.Clock()
 
     try:
+        if "escape" in start_keys:
+            raise KeyboardInterrupt
+
+        win.callOnFlip(history_clock.reset)
+        win.callOnFlip(send_trigger_pulse, trigger_pin, args.pulse_duration)
         for rep in range(args.repeats):
             for frame_idx in range(n_frames):
                 if frame_idx > 0 or rep > 0:
@@ -157,7 +164,6 @@ def main():
                     if i_refresh == 0:
                         onset = history_clock.getTime()
 
-                # this frame's onset is the previous frame's offset
                 if log_rows:
                     log_rows[-1][3] = onset
                 log_rows.append([rep, startF + frame_idx, onset, None])
@@ -168,7 +174,7 @@ def main():
     except KeyboardInterrupt:
         pass
     finally:
-        # blank the screen; this flip is the offset of the last movie frame
+
         win.flip()
         if log_rows:
             log_rows[-1][3] = history_clock.getTime()
@@ -189,4 +195,5 @@ def main():
 
 
 if __name__ == "__main__":
+    
     main()
