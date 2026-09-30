@@ -333,7 +333,7 @@ def compute_split_STAs_mp(
     del flat_arr
     gc.collect()
 
-    from sparse_noise import jaccard_topk
+    from utils.sparse_noise import jaccard_topk
     split_corr = np.array([
         jaccard_topk(STA1_out[c], STA2_out[c])
         for c in range(n_cells)

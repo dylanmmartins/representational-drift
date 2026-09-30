@@ -216,3 +216,13 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+
+*.mat
+*.tif
+*.tiff
+*.csv
+*.pdf
+*.png
+.vscode/*
+.virtual_documents/*

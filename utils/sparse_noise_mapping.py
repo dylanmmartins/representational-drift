@@ -23,8 +23,8 @@ DMM, March 2026
 import os
 from utils.gui_funcs import select_file
 from utils.files import read_h5, write_h5
-from sparse_noise import compute_calcium_sta_spatial, compute_split_STAs
-from sparse_noise_mp import compute_split_STAs_mp
+from utils.sparse_noise import compute_calcium_sta_spatial, compute_split_STAs
+from utils.sparse_noise_mp import compute_split_STAs_mp
 import argparse
 import numpy as np
 import platform

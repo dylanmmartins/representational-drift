@@ -4,7 +4,7 @@ from matplotlib.backends.backend_pdf import PdfPages
 import pandas as pd
 import os
 from utils.files import find
-from twop_helpers import read_xml
+from utils.twop_helpers import read_xml
 
 gt_dir = '/home/dylan/Fast2/repdrift/week1/260929_DMM_DMM085_week1/pg'
 

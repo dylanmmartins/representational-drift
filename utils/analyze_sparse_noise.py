@@ -33,10 +33,10 @@ import h5py
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
 
-from twop import TwoP, run_omsi
-from twop_helpers import read_xml
+from utils.twop import TwoP, run_omsi
+from utils.twop_helpers import read_xml
 from utils.files import find, write_h5
-from sparse_noise_mapping import calc_sparse_noise_STA_reliability, default_stimpath
+from utils.sparse_noise_mapping import calc_sparse_noise_STA_reliability, default_stimpath
 
 
 cfg = {
@@ -53,7 +53,7 @@ cfg = {
     'omsi_env': 'spikeinf',
     'oasis_spike_thresh': 0.05,
     # Filename patterns of the psychopy timestamp file, in order of preference.
-    'stimT_patterns': ['*sparsenoise.csv', 'sparse_noise_time*.txt'],
+    'stimT_patterns': ['*sparsenoise.csv', 'sparse_noise_timestamps_*.csv', 'sparse_noise_time*.txt'],
     # Columns of the psychopy timestamp file to use as stimulus onset times, in
     # order of preference. 'psychopy_time' is what the recorded sessions have;
     # 'stim_onset_clock' is what sparse_noise_v01.py writes; 'onset_s' is what
