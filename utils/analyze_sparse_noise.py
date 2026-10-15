@@ -33,10 +33,10 @@ import h5py
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
 
-from utils.twop import TwoP, run_omsi
-from utils.twop_helpers import read_xml
-from utils.files import find, write_h5
-from utils.sparse_noise_mapping import calc_sparse_noise_STA_reliability, default_stimpath
+from twop import TwoP, run_omsi
+from twop_helpers import read_xml
+from files import find, write_h5
+from sparse_noise_mapping import calc_sparse_noise_STA_reliability, default_stimpath
 
 
 cfg = {
@@ -59,12 +59,6 @@ cfg = {
     # 'stim_onset_clock' is what sparse_noise_v01.py writes; 'onset_s' is what
     # the sparse_noise_time_*.txt files have.
     'stimT_columns': ['psychopy_time', 'stim_onset_clock', 'onset_s'],
-    # Offset (s) added to the stimulus times to put them on the 2P clock. The
-    # psychopy and 2P clocks are not synchronized; None estimates it with a
-    # low-resolution split-half STA lag scan (see estimate_stim_lag).
-    'stim_lag': None,
-    'lag_scan_range': (-10., 30.),
-    'lag_scan_step': 0.25,
     # Number of cells in the STA PDF.
     'n_plot_cells': 8,
     # Stimulus frame period (s) used to make up timestamps when no
@@ -130,75 +124,6 @@ def load_stimT(rpath, stimpath, cfg):
           'timestamps at a constant {:.4f} s period. Alignment is '
           'approximate.'.format(', '.join(cfg['stimT_patterns']), rpath, n_stim, period))
     return np.arange(n_stim) * period
-
-
-def estimate_stim_lag(stimpath, spks, twopT, stimT, cfg, block=16):
-    """ Offset (s) to add to stimT to put it on the 2P clock.
-
-    Scans lags and picks the one where STAs from the first and second half of
-    the recording agree best (median correlation across cells). The sparse
-    noise sequence does not repeat, so a wrong lag gives uncorrelated halves.
-    Uses a block-averaged stimulus and each cell's mean activity during each
-    stimulus frame, so it takes ~30 s instead of the full STA computation.
-    """
-
-    stim_mmap = np.load(stimpath, mmap_mode='r')
-    n_stim, H, W = stim_mmap.shape[:3]
-    Hc, Wc = (H // block) * block, (W // block) * block
-    stim_ds = np.zeros([n_stim, Hc // block, Wc // block], dtype=np.float32)
-    print('  Block-averaging stimulus for lag scan...')
-    for s in range(0, n_stim, 50):
-        chunk = stim_mmap[s:s+50, :Hc, :Wc]
-        if chunk.ndim == 4:
-            chunk = chunk[..., 0]
-        chunk = np.asarray(chunk, dtype=np.float32)
-        stim_ds[s:s+50] = chunk.reshape(-1, Hc // block, block, Wc // block, block).mean(axis=(2, 4))
-    stim_ds = stim_ds.reshape(n_stim, -1)
-    stim_ds -= stim_ds.mean(axis=0)
-
-    frame_dur = np.nanmedian(np.diff(stimT))
-    spks_cumsum = np.concatenate([np.zeros([spks.shape[0], 1]), np.cumsum(spks, axis=1)], axis=1)
-
-    def split_half_reliability(lag):
-        # mean activity of each cell during each stimulus frame, shifted by lag
-        onsets = stimT + lag
-        i0 = np.searchsorted(twopT, onsets)
-        i1 = np.searchsorted(twopT, onsets + frame_dur)
-        valid = (onsets >= twopT[0]) & (onsets + frame_dur <= twopT[-1]) & (i1 > i0)
-        half1 = valid & (np.arange(n_stim) < n_stim // 2)
-        half2 = valid & (np.arange(n_stim) >= n_stim // 2)
-        if np.sum(half1) < n_stim // 4 or np.sum(half2) < n_stim // 4:
-            return np.nan # too little of this half falls inside the recording
-        rates = np.zeros([spks.shape[0], n_stim], dtype=np.float32)
-        rates[:, valid] = (spks_cumsum[:, i1[valid]] - spks_cumsum[:, i0[valid]]) / (i1 - i0)[valid]
-        stas = []
-        for half in (half1, half2):
-            r = rates[:, half] - np.mean(rates[:, half], axis=1, keepdims=True)
-            sta = r @ stim_ds[half]
-            stas.append(sta - np.mean(sta, axis=1, keepdims=True))
-        corr = np.sum(stas[0] * stas[1], axis=1) / np.sqrt(
-            np.sum(stas[0]**2, axis=1) * np.sum(stas[1]**2, axis=1))
-        return np.nanmedian(corr)
-
-    lags = np.arange(cfg['lag_scan_range'][0], cfg['lag_scan_range'][1] + cfg['lag_scan_step'] / 2,
-                     cfg['lag_scan_step'])
-    lag_reliability = np.array([split_half_reliability(lag) for lag in lags])
-    best_lag = lags[np.nanargmax(lag_reliability)]
-    rel_at_zero = split_half_reliability(0.)
-
-    if np.abs(best_lag) >= np.nanmedian(np.diff(twopT)):
-        print('*' * 70)
-        print('Stimulus/2P timing offset detected: {:.2f} s (scanned {:.2f} to {:.2f} s)'.format(
-            best_lag, lags[0], lags[-1]))
-        print('Median split-half STA correlation: {:.3f} at 0 s, {:.3f} at {:.2f} s'.format(
-            rel_at_zero, np.nanmax(lag_reliability), best_lag))
-        print('Stimulus times are shifted by this lag for the analysis below.')
-        print('Other stimuli recorded on this day may have the same sync problem.')
-        if best_lag in (lags[0], lags[-1]):
-            print('Best lag is at the edge of the scan range, so the true offset may be larger.')
-        print('*' * 70)
-
-    return best_lag, lags, lag_reliability
 
 
 def plot_split_STAs(sn_path, stimpath, pdf_path, n_cells=8):
@@ -338,15 +263,9 @@ def main(rpath, cfg=cfg):
     twop_dict['dFF_transients'] = dFF_transients
 
     sn_stimT = load_stimT(rpath, stimpath, cfg)
-    stim_lag = cfg['stim_lag']
-    if stim_lag is None:
-        stim_lag, _, _ = estimate_stim_lag(
-            stimpath, spks[iscell[:,0].astype(bool)][:, :len(twopT)], twopT, sn_stimT, cfg)
-    sn_stimT = sn_stimT + stim_lag
 
     preprocessed_dict = {**twop_dict, **recording_props}
     preprocessed_dict['stimT'] = sn_stimT
-    preprocessed_dict['stim_lag'] = float(stim_lag)
 
     # Discrete spike times, stored as a NaN-padded (n_cells, max_spikes) array
     # so it can be written to HDF5.

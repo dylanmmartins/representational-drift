@@ -92,7 +92,6 @@ def load_twop(suite2p_dir, neu_correction=0.7, use_omsi=True):
 
 
 def load_stimulus_info(stim_type=1):
-    # stim type should be 1, 2, or 3 for natural movie number
 
     if stim_type == 1:
         stim_info = {
@@ -551,7 +550,5 @@ def track_pupil(rec_dir, eye_dlc_h5):
 def main():
 
     
-
-
 if __name__ == '__main__':
     main()

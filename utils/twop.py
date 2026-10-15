@@ -43,7 +43,7 @@ try:
 except ModuleNotFoundError:
     _oasis_available = False
 
-from utils.files import write_h5
+from files import write_h5
 
 
 class TwoP():
@@ -202,7 +202,7 @@ class TwoP():
 
             if use_oasis:
 
-                g = oasis.functions.estimate_time_constant(norm_dFF[c, :].copy(), 1)
+                g = oasis.functions.estimate_time_constant(norm_dFF[c, :].copy(), 1)[0] # AR1 coefficient as a scalar
                 denoised_dFF[c, :], sps[c, :] = oasis.oasisAR1(norm_dFF[c, :].copy(), g)
 
             norm_F[c, :] = _normF
@@ -528,7 +528,7 @@ def calc_inf_spikes(dFF, neu_correction=0.7, fps=7.49):
 
     for c in range(nCells):
 
-        g = oasis.functions.estimate_time_constant(dFF[c, :].copy(), 1)
+        g = oasis.functions.estimate_time_constant(dFF[c, :].copy(), 1)[0] # AR1 coefficient as a scalar
         denoised_dFF[c, :], sps[c, :] = oasis.oasisAR1(dFF[c, :].copy(), g)
 
     return denoised_dFF, sps

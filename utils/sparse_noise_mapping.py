@@ -21,10 +21,10 @@ DMM, March 2026
 
 
 import os
-from utils.gui_funcs import select_file
-from utils.files import read_h5, write_h5
-from utils.sparse_noise import compute_calcium_sta_spatial, compute_split_STAs
-from utils.sparse_noise_mp import compute_split_STAs_mp
+from gui_funcs import select_file
+from files import read_h5, write_h5
+from sparse_noise import compute_calcium_sta_spatial, compute_split_STAs
+from sparse_noise_mp import compute_split_STAs_mp
 import argparse
 import numpy as np
 import platform
@@ -132,7 +132,7 @@ def calc_sparse_noise_STA_reliability(preproc_path=None, stimpath=None,
     data = read_h5(preproc_path)
 
     # Do NOT load the full stimulus into RAM -- the mp function streams it.
-    spikes = data['s2p_spks']
+    spikes = data['s2p_spks'][:50,:] # nCells, nFrames
     stimT  = data['stimT']
     twopT  = data['twopT']
 
