@@ -1,28 +1,16 @@
 # -*- coding: utf-8 -*-
 """
-analyze_sparse_noise.py
+representational_drift/utils/analyze_sparse_noise.py
 
-Preprocess a sparse-noise two-photon recording (suite2p outputs + Bruker
-timestamps + psychopy stimulus timestamps), write <rec>_preproc.h5, and
-compute split-half receptive-field STAs from it.
+Analyze sparse noise stimulus.
 
-Usage
------
-    python analyze_sparse_noise.py /path/to/recording_dir
-    python analyze_sparse_noise.py /path/to/recording_dir --plot-only
-
---plot-only skips the analysis and writes the STA PDF from an existing
-sparse_noise.h5.
-
-Run from the repo root in an env with oasis + h5py (e.g. fm2/fm3). OMSI spike
-inference is run out-of-process in the `spikeinf` conda env.
+DMM, October 2026
 """
 
 import os
+import glob
 import argparse
 import numpy as np
-# NumPy version shim: files saved with NumPy 2.x reference numpy._core,
-# but NumPy 1.x only has numpy.core.  Register aliases so pickle can find them.
 import sys as _sys_np_shim
 _sys_np_shim.modules.setdefault('numpy._core', np.core)
 for _a in dir(np.core):
@@ -40,42 +28,23 @@ from sparse_noise_mapping import calc_sparse_noise_STA_reliability, default_stim
 
 
 cfg = {
-    # Fallback 2P frame rate (Hz); replaced by the rate in the Bruker XML when
-    # it is available. TwoP only uses it to set self.dt.
     'twop_rate': 7.49,
-    # SD threshold used by TwoP.calc_dFF_transients and TwoP.normalize_spikes.
     'cell_sd_thresh': 2,
-    # Neuropil subtraction coefficient for dF/F and OMSI.
     'neu_correction': 0.7,
-    # Discrete spike-time inference: 'omsi' (MCMC, falls back to 'oasis' if
-    # the conda env is unavailable) or 'oasis' (thresholded OASIS AR1).
     'spike_method': 'omsi',
     'omsi_env': 'spikeinf',
     'oasis_spike_thresh': 0.05,
-    # Filename patterns of the psychopy timestamp file, in order of preference.
     'stimT_patterns': ['*sparsenoise.csv', 'sparse_noise_timestamps_*.csv', 'sparse_noise_time*.txt'],
-    # Columns of the psychopy timestamp file to use as stimulus onset times, in
-    # order of preference. 'psychopy_time' is what the recorded sessions have;
-    # 'stim_onset_clock' is what sparse_noise_v01.py writes; 'onset_s' is what
-    # the sparse_noise_time_*.txt files have.
     'stimT_columns': ['psychopy_time', 'stim_onset_clock', 'onset_s'],
-    # Number of cells in the STA PDF.
     'n_plot_cells': 8,
-    # Stimulus frame period (s) used to make up timestamps when no
-    # *sparsenoise.csv exists. Nominal on_time is 0.5 s, but frames run long:
-    # measured mean interval in 251016_DMM_DMM061_pos18/sn1 was 0.5295 s
-    # (4000 frames over 2117.6 s). Using 0.5 would drift ~118 s by the end.
     'stim_frame_period': 0.5295,
-    # Sparse noise stimulus array (N, H, W[, C]); None uses the OS default in
-    # sparse_noise_mapping.
     'stimpath': None,
-    # STA lag window in stimulus frames.
     'sta_window': 13,
+    'sta_downsample': 4,
 }
 
 
 def find_bruker_xml(rpath):
-    """ Return the main Bruker T-series XML, skipping voltage/reference files. """
 
     xmls = find('*.xml', rpath)
     xmls = [
@@ -89,14 +58,6 @@ def find_bruker_xml(rpath):
 
 
 def load_stimT(rpath, stimpath, cfg):
-    """ Stimulus onset times (s) from the psychopy timestamp file, or made up if absent.
-
-    If no file matching cfg['stimT_patterns'] exists in `rpath`, assumes one onset per stimulus
-    frame at a constant `cfg['stim_frame_period']`, starting at t=0. This
-    ignores frame-to-frame jitter and any slow drift in the true period, so
-    it is only approximately aligned (in the measured sn1 session a constant
-    period was up to ~1 s off mid-recording).
-    """
 
     n_stim = np.load(stimpath, mmap_mode='r').shape[0]
 
@@ -105,6 +66,12 @@ def load_stimT(rpath, stimpath, cfg):
         csv_path = find(pattern, rpath, MR=True, retempty=True)
         if csv_path is not None:
             break
+    if csv_path is None:
+        for pattern in cfg['stimT_patterns']:
+            matches = glob.glob(os.path.join(os.path.dirname(rpath), pattern))
+            if len(matches) > 0:
+                csv_path = max(matches, key=os.path.getmtime)
+                break
 
     if csv_path is not None:
         df = pd.read_csv(csv_path)
@@ -127,13 +94,12 @@ def load_stimT(rpath, stimpath, cfg):
 
 
 def plot_split_STAs(sn_path, stimpath, pdf_path, n_cells=8):
-    """ PDF of first-half, second-half and full STAs for the first n_cells cells.
 
-    Reads only those cells' rows from sparse_noise.h5, which is too large to load whole.
-    """
-
-    H, W = np.load(stimpath, mmap_mode='r').shape[1:3]
     with h5py.File(sn_path, 'r') as f:
+        if 'shape' in f:
+            H, W = f['shape'][()]
+        else:
+            H, W = np.load(stimpath, mmap_mode='r').shape[1:3]
         n_cells = min(n_cells, f['STA'].shape[0])
         stas = [f[k][:n_cells].reshape(n_cells, H, W) for k in ('STA1', 'STA2', 'STA')]
         jcorr = f['jcorr'][:n_cells]
@@ -158,11 +124,6 @@ def plot_split_STAs(sn_path, stimpath, pdf_path, n_cells=8):
 
 def get_discrete_spike_times_oasis(raw_F, raw_Fneu, fs, neu_correction=0.7,
                                    spike_thresh=0.05):
-    """ OASIS AR1 deconvolution, thresholded to discrete spike times (s).
-
-    Uses an 8th-percentile baseline dF/F so the result is on the same scale as
-    OMSI's internal dF/F.
-    """
 
     from oasis.functions import deconvolve
 
@@ -180,14 +141,6 @@ def get_discrete_spike_times_oasis(raw_F, raw_Fneu, fs, neu_correction=0.7,
 
 
 def get_spike_times_list(raw_F, raw_Fneu, fs, cfg):
-    """ Per-cell discrete spike times in seconds from frame 0 of the recording.
-
-    Returns
-    -------
-    spike_times : list of np.ndarray, length n_cells
-    prob_trace : (n_cells, n_frames) array or None
-        OMSI expected spikes per frame; None when OASIS was used.
-    """
 
     if cfg['spike_method'] == 'omsi':
         print('  OMSI spike inference on {} cells at {:.3f} Hz...'.format(
@@ -222,8 +175,6 @@ def main(rpath, cfg=cfg):
     stat = np.load(find('stat.npy', rpath, MR=True), allow_pickle=True)
     ops = np.load(find('ops.npy', rpath, MR=True), allow_pickle=True)
 
-    # Read Bruker timestamps. relativeTime is seconds since the first frame,
-    # i.e. since the trigger that started acquisition.
     print('  Reading Bruker timestamps from {}'.format(xml_path))
     acq_props = read_xml(xml_path)
     twopT = acq_props['rel_time']
@@ -240,14 +191,12 @@ def main(rpath, cfg=cfg):
     )
     twop_dict = twop_recording.calc_dFF(neu_correction=cfg['neu_correction'], use_oasis=True)
     dFF_transients = twop_recording.calc_dFF_transients()
-    # Set a maximum spike rate for each cell, then normalize spikes
     normspikes = twop_recording.normalize_spikes()
     recording_props = twop_recording.get_recording_props(
         stat=stat,
         ops=ops
     )
 
-    # Bruker can log one more (or fewer) frame than suite2p processed.
     n_frames = np.size(twop_dict['s2p_spks'], 1)
     if len(twopT) != n_frames:
         print('  {} Bruker timestamps vs {} suite2p frames; trimming to match.'.format(
@@ -267,8 +216,6 @@ def main(rpath, cfg=cfg):
     preprocessed_dict = {**twop_dict, **recording_props}
     preprocessed_dict['stimT'] = sn_stimT
 
-    # Discrete spike times, stored as a NaN-padded (n_cells, max_spikes) array
-    # so it can be written to HDF5.
     _fs = float(1.0 / np.nanmedian(np.diff(twopT)))
     _spike_times_list, _prob_trace = get_spike_times_list(
         twop_dict['raw_F'], twop_dict['raw_Fneu'], _fs, cfg
@@ -290,7 +237,8 @@ def main(rpath, cfg=cfg):
     calc_sparse_noise_STA_reliability(
         _savepath,
         stimpath=stimpath,
-        window=cfg['sta_window']
+        window=cfg['sta_window'],
+        downsample=cfg['sta_downsample']
     )
 
     plot_split_STAs(

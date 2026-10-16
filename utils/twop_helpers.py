@@ -9,20 +9,13 @@ def read_xml(xml_path):
     tree = ET.parse(xml_path)
     root = tree.getroot()
 
-    # Get the number of frames in the image stack (the Sequence can also hold
-    # non-Frame children, e.g. VoltageRecording entries)
     nF = len([c for c in tree.find('Sequence') if c.tag == 'Frame'])
 
-
-    # Absolute and relative times
-    # Absolute are offset from the first timestamp by ~10 seconds
     absoluteT = np.zeros([nF], dtype=float)
     relativeT = np.zeros([nF], dtype=float)
     
-    # Name of the file for each frame
     fnames = np.zeros([nF], dtype=str)
 
-    # Iterate through the xml file and get the absolute and relative times
     for child in list(root.find('Sequence')):
         if child.tag != 'Frame':
             continue
@@ -34,14 +27,9 @@ def read_xml(xml_path):
         relativeT[i] = float(child.attrib['relativeTime'])
         fnames[i] = _f
 
-    # Get the month, day and year from the xml file. This will be a
-    # list of strings
     mdy = [int(x) for x in root.get('date').split(' ')[0].split('/')]
 
-    # Get the starttime of the recording
     t0_str = root.find('Sequence').attrib['time']
-    # Format that string into a datetime object with the correct day, month
-    # and year, instead of the 1/1/1900 that it is create with by default
     t0 = (
         datetime.datetime.strptime(t0_str[:-1], '%H:%M:%S.%f')
         - datetime.datetime(year=1900, month=1, day=1)
@@ -52,7 +40,6 @@ def read_xml(xml_path):
     rel_2P_timestamps = relativeT
     num_2P_frames = nF
     
-    # Not every Bruker config writes every key; default to None
     acq_Hz = optical_zoom = laser_pockels = laser_wavelengths = None
     lines_per_frame = umPerPix_X = umPerPix_Y = umPerPix_Z = None
     pmt1_gain = pmt2_gain = None

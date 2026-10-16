@@ -2,28 +2,16 @@
 """
 fm2p/utils/gui_funcs.py
 
-Tkinter-based GUI dialogs for file selection and user text input.
-
-Functions
----------
-select_file
-    Open a file-chooser dialog and return the selected path.
-select_directory
-    Open a folder-chooser dialog and return the selected path.
-get_string_input
-    Show a minimal text-entry dialog and return the typed string.
-
+GUI dialogs.
 
 DMM, March 2025
 """
-
 
 import tkinter as tk
 from tkinter import filedialog
 
 
 def select_file(title, filetypes):
-    """ Open a file-chooser dialog and return the selected path. """
 
     print(title)
     root = tk.Tk()
@@ -38,7 +26,6 @@ def select_file(title, filetypes):
 
 
 def select_directory(title):
-    """ Open a folder-chooser dialog and return the selected directory path. """
 
     print(title)
     root = tk.Tk()
@@ -52,7 +39,6 @@ def select_directory(title):
 
 
 def get_string_input(title):
-    """ Show a minimal Tkinter text-entry dialog and return the typed string. """
 
     print(title)
 
@@ -66,7 +52,6 @@ def get_string_input(title):
     user_input = None
 
     def retrieve_input():
-        """ Grab entry text and close dialog. """
 
         nonlocal user_input
         user_input = entry.get()

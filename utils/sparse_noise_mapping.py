@@ -4,17 +4,6 @@ fm2p/sparse_noise_mapping.py
 
 Receptive field mapping from sparse noise stimuli.
 
-Functions
----------
-calc_sparse_noise_STAs
-    Spatial STAs from sparse noise; writes sparse_noise_receptive_fields.h5.
-calc_sparse_noise_STA_reliability
-    Full and split-half STAs, streamed from disk; writes sparse_noise.h5.
-calc_STA_correlation
-    Split-half STA correlations and responsive flag; saves reliability_stats_v2.npy.
-sparse_noise_mapping
-    Dispatch to split STAs, reliability, or single-STA mapping.
-
 
 DMM, March 2026
 """
@@ -24,7 +13,7 @@ import os
 from gui_funcs import select_file
 from files import read_h5, write_h5
 from sparse_noise import compute_calcium_sta_spatial, compute_split_STAs
-from sparse_noise_mp import compute_split_STAs_mp
+from sparse_noise_fast import compute_split_STAs_fast
 import argparse
 import numpy as np
 import platform
@@ -34,7 +23,6 @@ os_name = platform.system()
 
 
 def default_stimpath():
-    """ OS-specific path to the sparse noise stimulus .npy. """
 
     if os_name == 'Linux':
         return '/home/dylan/Fast2/repdrift/sparse_noise_sequence_v10.npy'
@@ -43,19 +31,6 @@ def default_stimpath():
 
 
 def calc_sparse_noise_STAs(preproc_path=None, stimpath=None):
-    """ Spatial STAs from sparse noise; writes sparse_noise_receptive_fields.h5.
-
-    Parameters
-    ----------
-    preproc_path : str or None
-        Preproc .h5; opens a picker if None.
-    stimpath : str or None
-        Stimulus .npy; OS-specific default if None.
-
-    Returns
-    -------
-    dict_out : dict
-    """
 
     if preproc_path is None:
         preproc_path = select_file(
@@ -104,20 +79,7 @@ def calc_sparse_noise_STAs(preproc_path=None, stimpath=None):
 
 
 def calc_sparse_noise_STA_reliability(preproc_path=None, stimpath=None,
-                                       n_processes=None, window=13):
-    """ Full and split-half STAs, streamed from disk; writes sparse_noise.h5.
-
-    Parameters
-    ----------
-    preproc_path : str or None
-        Preproc .h5; opens a picker if None.
-    stimpath : str or None
-        Stimulus .npy; OS-specific default if None.
-    n_processes : int or None
-        Worker count.
-    window : int
-        STA lag window in frames.
-    """
+                                       window=13, downsample=4):
 
     if preproc_path is None:
         preproc_path = select_file(
@@ -131,18 +93,17 @@ def calc_sparse_noise_STA_reliability(preproc_path=None, stimpath=None,
     print('  Loading preprocessed data.')
     data = read_h5(preproc_path)
 
-    # Do NOT load the full stimulus into RAM -- the mp function streams it.
-    spikes = data['s2p_spks'][:50,:] # nCells, nFrames
+    spikes = data['s2p_spks'] # nCells, nFrames
     stimT  = data['stimT']
     twopT  = data['twopT']
 
-    STA, STA1, STA2, r, lags = compute_split_STAs_mp(
+    STA, STA1, STA2, r, lags, shape = compute_split_STAs_fast(
         stimpath,
         spikes,
         stimT,
         twopT,
         window=window,
-        n_processes=n_processes,
+        downsample=downsample,
     )
 
     dict_out = {
@@ -151,6 +112,8 @@ def calc_sparse_noise_STA_reliability(preproc_path=None, stimpath=None,
         'STA2':  STA2,
         'lags':  lags,
         'jcorr': r,
+        'shape': np.array(shape),
+        'downsample': int(downsample),
     }
 
     savepath = os.path.join(os.path.split(preproc_path)[0], 'sparse_noise.h5')

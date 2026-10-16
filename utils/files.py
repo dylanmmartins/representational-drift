@@ -1,3 +1,11 @@
+# -*- coding: utf-8 -*-
+"""
+representational_drift/utils/files.py
+
+File operations.
+
+DMM, October 2026
+"""
 
 import os
 import fnmatch
@@ -7,27 +15,6 @@ import numpy as np
 
 
 def time2str(time_array):
-    """ Convert datetime to string.
-
-    The datetime values cannot be written into a hdf5
-    file, so we convert them to strings before writing.
-
-    Parameters
-    ----------
-    time_array : np.array, datetime.datetime
-        If np.array with the shape (n,) where n is the
-        number of samples in the recording. If datetime,
-        the value will be converted to a single string.
-
-    Returns
-    -------
-    out : str, list
-        If time_array was a datetime, the returned value
-        is a single string. Otherwise, it will be a list
-        of strings with the same length as the input array.
-        Str timestamps are use the format '%Y-%m-%d-%H-%M-%S-%f'.
-
-    """
 
     fmt = '%Y-%m-%d-%H-%M-%S-%f'
 
@@ -45,15 +32,6 @@ def time2str(time_array):
 
 
 def write_h5(filename, dic):
-    """ Write a nested dict to an HDF5 file.
-
-    Parameters
-    ----------
-    filename : str
-        Output path.
-    dic : dict
-        Arbitrarily nested dict; values must be numpy arrays, scalars, or strings.
-    """
 
     with h5py.File(filename, 'w') as h5file:
         recursively_save_dict_contents_to_group(h5file, '/', dic)

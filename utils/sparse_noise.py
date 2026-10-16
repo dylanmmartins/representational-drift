@@ -1,22 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-fm2p/utils/sparse_noise.py
-
-Spike-triggered average (STA) computation from sparse-noise visual stimuli.
-
-Functions
----------
-find_delay_frames
-    Estimate the stimulus-response lag via cross-correlation.
-jaccard_topk
-    Jaccard overlap of the top-k pixels between two STAs.
-compute_calcium_sta_spatial
-    Compute per-cell STAs from a sparse-noise stimulus and calcium spike traces.
-keep_best_STA_lag
-    Retain the single best temporal lag for each cell's STA.
-compute_split_STAs
-    Compute full, first-half, and second-half STAs and their split correlation.
-
+representational_drift/utils/sparse_noise.py
 
 DMM, September 2025
 """
@@ -29,32 +13,12 @@ from scipy.interpolate import interp1d
 from scipy.signal import correlate
 import gc
 
-
-
 def find_closest_timestamp(arr, t):
-    """ Index and value of the timestamp in `arr` closest to `t`. """
-
     ind = np.nanargmin(np.abs(arr - t))
     return ind, arr[ind]
 
 
 def find_delay_frames(stim_s, pop_s, max_lag=80):
-    """ Estimate the stimulus-to-response lag (in frames) via cross-correlation.
-
-    Parameters
-    ----------
-    stim_s : array-like
-        Stimulus-derived trace (e.g., mean luminance per frame).
-    pop_s : array-like
-        Population-mean spike trace at the stimulus frame rate.
-    max_lag : int
-        Maximum lag magnitude to consider.
-
-    Returns
-    -------
-    lag : int
-        Best lag in frames (positive = stimulus leads response).
-    """
 
     stim_s = np.asarray(stim_s).ravel()
     pop_s = np.asarray(pop_s).ravel()
@@ -71,24 +35,6 @@ def find_delay_frames(stim_s, pop_s, max_lag=80):
 
 
 def jaccard_topk(sta1, sta2, pct=1.0):
-    """ Jaccard overlap of the top-pct% highest-magnitude pixels between two STAs.
-
-    Tests whether the same pixels are strongest in both halves of the data,
-    which is a robust split-half reliability check that does not require the
-    magnitude scales to match.
-
-    Parameters
-    ----------
-    sta1, sta2 : np.ndarray
-        Flattened or 2D STA arrays.
-    pct : float
-        Percentage of pixels to threshold (default 1%).
-
-    Returns
-    -------
-    float
-        Jaccard index in [0, 1].
-    """
 
     n = sta1.size
     k = max(1, int(np.round(n * (pct / 100.0))))
@@ -115,36 +61,6 @@ def compute_calcium_sta_spatial(
         max_lag_frames=80,
         skip_trim=False
 ):
-    """ Compute spike-triggered averages from a sparse-noise stimulus.
-
-    Interpolates each cell's spike trace onto the stimulus timebase, then
-    computes a weighted average of stimulus frames over a temporal window.
-
-    Parameters
-    ----------
-    stimulus : np.ndarray, shape (N_frames, H, W)
-        Sparse noise stimulus frames.
-    spikes : np.ndarray, shape (N_cells, N_spike_samples)
-        Spike rate traces at spike_times.
-    stim_times : np.ndarray
-        Timestamp for each stimulus frame (seconds).
-    spike_times : np.ndarray
-        Timestamp for each spike sample (seconds).
-    window : int
-        Number of frames before the spike to include in the average.
-    delay : np.ndarray or None
-        Per-cell delay in frames. If None, estimated from cross-correlation.
-    max_lag_frames : int
-        Maximum lag for auto-detected delay.
-    skip_trim : bool
-        If False, trim spike_times to the stimulus duration.
-
-    Returns
-    -------
-    sta_all : np.ndarray, shape (N_cells, window+1, H*W)
-    lag_axis : np.ndarray
-    est_delay_frames : int
-    """
 
     stimulus = np.asarray(stimulus)
     spikes = np.asarray(spikes)
@@ -247,17 +163,6 @@ def compute_calcium_sta_spatial(
 
 
 def keep_best_STA_lag(STAs):
-    """ Retain the single best temporal lag for each cell's STA.
-
-    Parameters
-    ----------
-    STAs : np.ndarray, shape (N_cells, N_lags, N_features)
-
-    Returns
-    -------
-    kept_STAs : np.ndarray, shape (N_cells, N_features)
-    best_lags : np.ndarray, shape (N_cells,)
-    """
 
     n_cells = np.size(STAs, 0)
     best_lags = np.zeros(n_cells)
@@ -279,25 +184,6 @@ def compute_split_STAs(
         window=13,
         delay=None
 ):
-    """ Compute full, first-half, and second-half STAs and their Jaccard split correlation.
-
-    Parameters
-    ----------
-    stimulus : np.ndarray, shape (N_frames, H, W)
-    spikes : np.ndarray, shape (N_cells, N_samples)
-    stim_times : np.ndarray
-    spike_times : np.ndarray
-    window : int
-    delay : np.ndarray or None
-
-    Returns
-    -------
-    STA : np.ndarray, shape (N_cells, N_features)
-    STA1 : np.ndarray -- first-half STA
-    STA2 : np.ndarray -- second-half STA
-    split_corr : np.ndarray, shape (N_cells,) -- Jaccard index per cell
-    best_lags : np.ndarray, shape (N_cells,)
-    """
 
     print('Setting up spike splits.')
 
