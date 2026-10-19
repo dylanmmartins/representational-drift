@@ -18,6 +18,7 @@ from files import find, write_h5
 from twop_helpers import read_xml
 from gui_funcs import select_directory
 from reliability import rowwise_corr, shuffle_pvalue
+from activity import load_activity, frame_rate, SOURCES, DEFAULT_SOURCE, LABELS
 
 
 def calc_split_half_reliability(trial_resp, trial_oris, orientations, n_shuffles=1000, seed=0):
@@ -63,7 +64,7 @@ def calc_split_half_reliability(trial_resp, trial_oris, orientations, n_shuffles
     }
 
 
-def main(gt_dir, time_path=None, n_shuffles=1000):
+def main(gt_dir, time_path=None, n_shuffles=1000, activity_source=DEFAULT_SOURCE):
 
     if time_path is None:
         time_path = find(path=gt_dir, pattern='gratings_timestamps*.csv', MR=True)
@@ -72,10 +73,8 @@ def main(gt_dir, time_path=None, n_shuffles=1000):
 
     xml_data = read_xml(find(path=gt_dir, pattern='*.xml', MR=True))
 
-    sps = np.load(os.path.join(gt_dir, 'suite2p/plane0/spks.npy'), allow_pickle=True)
-    iscell = np.load(os.path.join(gt_dir, 'suite2p/plane0/iscell.npy'), allow_pickle=True)
-    sps = sps[iscell[:,0].astype(bool)] # keep only ROIs classified as cells
     twopT = xml_data['rel_time']
+    sps = load_activity(os.path.join(gt_dir, 'suite2p/plane0'), frame_rate(twopT), source=activity_source)
 
     orientations = np.arange(0, 360, 30)
     trial_oris = gt_time['orientation_deg'].astype(int).values
@@ -149,6 +148,8 @@ def main(gt_dir, time_path=None, n_shuffles=1000):
         'tuning_odd': rel['tuning_odd'],
         'trial_resp': trial_resp,
         'trial_oris': trial_oris,
+        'activity_source': activity_source,
+        'activity_label': LABELS[activity_source],
     }
     savepath = os.path.join(gt_dir, 'gratings.h5')
     write_h5(savepath, results)
@@ -192,8 +193,8 @@ def main(gt_dir, time_path=None, n_shuffles=1000):
         for ax in axs[n_plot_cells:]:
             ax.axis('off')
 
-        fig.suptitle('Direction tuning, first {} cells (x: direction, deg; y: mean spks)'.format(
-            n_plot_cells), fontsize=8)
+        fig.suptitle('Direction tuning, first {} cells (x: direction, deg; y: {})'.format(
+            n_plot_cells, LABELS[activity_source]), fontsize=8)
         fig.tight_layout(rect=[0, 0, 1, 0.98], h_pad=0.6, w_pad=0.3)
         pdf.savefig(fig)
         plt.close(fig)
@@ -207,6 +208,7 @@ if __name__ == '__main__':
     parser.add_argument('--time_path', default=None,
                         help='Gratings timestamp csv, if it is not inside --path')
     parser.add_argument('--n_shuffles', type=int, default=1000)
+    parser.add_argument('--activity', choices=SOURCES, default=DEFAULT_SOURCE)
     args = parser.parse_args()
 
     if args.path is None:
@@ -214,5 +216,5 @@ if __name__ == '__main__':
     else:
         usedir = args.path
     
-    main(usedir, time_path=args.time_path, n_shuffles=args.n_shuffles)
+    main(usedir, time_path=args.time_path, n_shuffles=args.n_shuffles, activity_source=args.activity)
 

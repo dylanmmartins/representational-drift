@@ -21,19 +21,19 @@ import h5py
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
 
-from twop import TwoP, run_omsi
+from twop import TwoP
 from twop_helpers import read_xml
 from files import find, write_h5
 from sparse_noise_mapping import calc_sparse_noise_STA_reliability, default_stimpath
+from activity import load_activity, SOURCES, DEFAULT_SOURCE
 
 
 cfg = {
     'twop_rate': 7.49,
     'cell_sd_thresh': 2,
     'neu_correction': 0.7,
-    'spike_method': 'omsi',
+    'activity_source': DEFAULT_SOURCE,
     'omsi_env': 'spikeinf',
-    'oasis_spike_thresh': 0.05,
     'stimT_patterns': ['*sparsenoise.csv', 'sparse_noise_timestamps_*.csv', 'sparse_noise_time*.txt'],
     'stimT_columns': ['psychopy_time', 'stim_onset_clock', 'onset_s'],
     'n_plot_cells': 8,
@@ -122,44 +122,6 @@ def plot_split_STAs(sn_path, stimpath, pdf_path, n_cells=8):
     print('  Wrote {}'.format(pdf_path))
 
 
-def get_discrete_spike_times_oasis(raw_F, raw_Fneu, fs, neu_correction=0.7,
-                                   spike_thresh=0.05):
-
-    from oasis.functions import deconvolve
-
-    Fc = np.asarray(raw_F, dtype=float) - neu_correction * np.asarray(raw_Fneu, dtype=float)
-    F0 = np.percentile(Fc, 8, axis=1, keepdims=True)
-    dff = (Fc - F0) / np.abs(F0)
-
-    g = np.exp(-1 / (fs * 0.5))
-    spike_times = []
-    for i in range(np.size(dff, 0)):
-        _, s, _, _, _ = deconvolve(dff[i], g=(g,), penalty=1)
-        spike_times.append(np.where(s > spike_thresh)[0] / fs)
-
-    return spike_times
-
-
-def get_spike_times_list(raw_F, raw_Fneu, fs, cfg):
-
-    if cfg['spike_method'] == 'omsi':
-        print('  OMSI spike inference on {} cells at {:.3f} Hz...'.format(
-            np.size(raw_F, 0), fs))
-        omsi = run_omsi(raw_F, raw_Fneu, fs, env=cfg['omsi_env'],
-                        f_corr=cfg['neu_correction'])
-        if omsi['spike_times'] is not None:
-            return omsi['spike_times'], omsi['prob_trace']
-        print('  OMSI unavailable, falling back to OASIS spike times.')
-
-    print('  OASIS spike inference on {} cells...'.format(np.size(raw_F, 0)))
-    spike_times = get_discrete_spike_times_oasis(
-        raw_F, raw_Fneu, fs,
-        neu_correction=cfg['neu_correction'],
-        spike_thresh=cfg['oasis_spike_thresh']
-    )
-    return spike_times, None
-
-
 def main(rpath, cfg=cfg):
 
     rpath = os.path.abspath(rpath)
@@ -168,7 +130,8 @@ def main(rpath, cfg=cfg):
     stimpath = cfg['stimpath'] if cfg['stimpath'] is not None else default_stimpath()
     xml_path = find_bruker_xml(rpath)
 
-    F = np.load(find('F.npy', rpath, MR=True), allow_pickle=True)
+    F_path = find('F.npy', rpath, MR=True)
+    F = np.load(F_path, allow_pickle=True)
     Fneu = np.load(find('Fneu.npy', rpath, MR=True), allow_pickle=True)
     spks = np.load(find('spks.npy', rpath, MR=True), allow_pickle=True)
     iscell = np.load(find('iscell.npy', rpath, MR=True), allow_pickle=True)
@@ -189,7 +152,7 @@ def main(rpath, cfg=cfg):
         spikes=spks,
         iscell=iscell
     )
-    twop_dict = twop_recording.calc_dFF(neu_correction=cfg['neu_correction'], use_oasis=True)
+    twop_dict = twop_recording.calc_dFF(neu_correction=cfg['neu_correction'], use_oasis=False)
     dFF_transients = twop_recording.calc_dFF_transients()
     normspikes = twop_recording.normalize_spikes()
     recording_props = twop_recording.get_recording_props(
@@ -217,18 +180,13 @@ def main(rpath, cfg=cfg):
     preprocessed_dict['stimT'] = sn_stimT
 
     _fs = float(1.0 / np.nanmedian(np.diff(twopT)))
-    _spike_times_list, _prob_trace = get_spike_times_list(
-        twop_dict['raw_F'], twop_dict['raw_Fneu'], _fs, cfg
+    preprocessed_dict['activity'] = load_activity(
+        os.path.dirname(F_path), _fs,
+        source=cfg['activity_source'],
+        neu_correction=cfg['neu_correction'],
+        omsi_env=cfg['omsi_env']
     )
-    if _prob_trace is not None:
-        preprocessed_dict['omsi_prob_trace'] = np.asarray(_prob_trace, dtype=np.float32)
-
-    _n_cells = len(_spike_times_list)
-    _max_sp = max((len(st) for st in _spike_times_list), default=1)
-    _sp_array = np.full((_n_cells, max(_max_sp, 1)), np.nan, dtype=np.float64)
-    for _i, _st in enumerate(_spike_times_list):
-        _sp_array[_i, :len(_st)] = _st
-    preprocessed_dict['spike_times'] = _sp_array
+    preprocessed_dict['activity_source'] = cfg['activity_source']
 
     _savepath = os.path.join(rpath, '{}_preproc.h5'.format(full_rname))
     print('  Writing preprocessed data to {}...'.format(_savepath))
@@ -255,6 +213,7 @@ if __name__ == '__main__':
     parser.add_argument('rpath', type=str, help='Recording directory')
     parser.add_argument('--plot-only', action='store_true',
                         help='Only write the STA PDF from an existing sparse_noise.h5')
+    parser.add_argument('--activity', choices=SOURCES, default=DEFAULT_SOURCE)
     args = parser.parse_args()
 
     if args.plot_only:
@@ -266,4 +225,4 @@ if __name__ == '__main__':
             n_cells=cfg['n_plot_cells']
         )
     else:
-        main(args.rpath)
+        main(args.rpath, cfg=dict(cfg, activity_source=args.activity))

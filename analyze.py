@@ -22,6 +22,7 @@ import analyze_gratings
 import analyze_movie
 import analyze_sparse_noise
 from sparse_noise_mapping import default_stimpath
+from activity import SOURCES, DEFAULT_SOURCE
 from summary_doc import make_summary_doc
 
 MOVIES = {
@@ -63,11 +64,12 @@ def find_stimpath(session_dir):
     return default_stimpath()
 
 
-def main(session_dir, skip_existing=False, n_shuffles=1000):
+def main(session_dir, skip_existing=False, n_shuffles=1000, activity_source=DEFAULT_SOURCE):
 
     session_dir = os.path.abspath(session_dir)
     rec_dirs = find_recording_dirs(session_dir)
     print('Session {}'.format(session_dir))
+    print('Activity: {}'.format(activity_source))
     for stim in STIMULI:
         print('  {:<13} {}'.format(stim, rec_dirs.get(stim, 'not found')))
     if len(rec_dirs) == 0:
@@ -95,7 +97,8 @@ def main(session_dir, skip_existing=False, n_shuffles=1000):
         run('gratings', os.path.join(gt_dir, 'gratings.h5'), lambda: analyze_gratings.main(
             gt_dir,
             time_path=find_timestamps(gt_dir, 'gratings_timestamps*.csv'),
-            n_shuffles=n_shuffles))
+            n_shuffles=n_shuffles,
+            activity_source=activity_source))
 
     for movie, prefix in MOVIES.items():
         if movie in rec_dirs:
@@ -103,11 +106,13 @@ def main(session_dir, skip_existing=False, n_shuffles=1000):
             run(movie, os.path.join(mv_dir, 'movie.h5'), lambda: analyze_movie.main(
                 mv_dir,
                 time_path=find_timestamps(mv_dir, '{}_timestamps*.csv'.format(prefix)),
-                n_shuffles=n_shuffles))
+                n_shuffles=n_shuffles,
+                activity_source=activity_source))
 
     if 'sparse_noise' in rec_dirs:
         sn_dir = rec_dirs['sparse_noise']
-        sn_cfg = dict(analyze_sparse_noise.cfg, stimpath=find_stimpath(session_dir))
+        sn_cfg = dict(analyze_sparse_noise.cfg, stimpath=find_stimpath(session_dir),
+                      activity_source=activity_source)
         print('Sparse noise stimulus: {}'.format(sn_cfg['stimpath']))
         run('sparse_noise', os.path.join(sn_dir, 'sparse_noise.h5'),
             lambda: analyze_sparse_noise.main(sn_dir, cfg=sn_cfg))
@@ -128,15 +133,20 @@ def main(session_dir, skip_existing=False, n_shuffles=1000):
 if __name__ == '__main__':
 
     parser = argparse.ArgumentParser()
-    parser.add_argument('--path', default=None, help='Session directory')
+    parser.add_argument('--dir', default=None, help='Session directory')
     parser.add_argument('--skip_existing', action='store_true',
                         help='Reuse gratings.h5 / movie.h5 / sparse_noise.h5 already in a recording directory')
     parser.add_argument('--n_shuffles', type=int, default=1000)
+    parser.add_argument('--activity', choices=SOURCES, default=DEFAULT_SOURCE,
+                        help='omsi_prob: OMSI spike probability; omsi_train: OMSI spike train; s2p: suite2p spks')
     args = parser.parse_args()
 
-    if args.path is None:
+    if args.dir is None:
         session_dir = select_directory('Select session directory')
     else:
-        session_dir = args.path
+        session_dir = args.dir
 
-    main(session_dir, skip_existing=args.skip_existing, n_shuffles=args.n_shuffles)
+    main(session_dir, skip_existing=args.skip_existing, n_shuffles=args.n_shuffles,
+         activity_source=args.activity)
+
+# python analyze.py --path /your/path/to/the/directory

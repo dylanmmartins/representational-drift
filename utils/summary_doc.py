@@ -40,7 +40,7 @@ def make_summary_doc(savepath, gratings_path=None, movie_paths=(), sparse_noise_
     gt = None
     if gratings_path is not None:
         gt = _read(gratings_path, ['orientations', 'tuning_mean', 'tuning_sem', 'tuning_even',
-                                   'tuning_odd', 'osi', 'dsi', 'pref', 'rel_r', 'rel_p'])
+                                   'tuning_odd', 'osi', 'dsi', 'pref', 'rel_r', 'rel_p', 'activity_label'])
         n_cells[gratings_path] = len(gt['osi'])
 
     movie_files = [h5py.File(p, 'r') for p in movie_paths]
@@ -106,7 +106,8 @@ def make_summary_doc(savepath, gratings_path=None, movie_paths=(), sparse_noise_
                     ax.set_xlim(oris[0], oris[-1])
                     ax.set_ylim(bottom=0)
                     ax.set_xlabel('direction (deg)', fontsize=8)
-                    ax.set_ylabel('mean spks', fontsize=8)
+                    label = gt.get('activity_label', b'mean spks')
+                    ax.set_ylabel(label.decode() if isinstance(label, bytes) else str(label), fontsize=8)
                     ax.legend(fontsize=6, frameon=False, loc='upper right')
                     ax.set_title('Gratings   odd/even r = {:.2f} (p = {:.3f})'.format(
                         gt['rel_r'][c], gt['rel_p'][c]), fontsize=9, loc='left')

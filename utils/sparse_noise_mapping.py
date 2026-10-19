@@ -30,6 +30,14 @@ def default_stimpath():
         return r'J:\sparse_noise\sparse_noise_sequence_v7.npy'
 
 
+def get_activity(data):
+
+    if 'activity' in data:
+        return data['activity']
+    print('  WARNING: no activity in preprocessed file (written before OMSI support); using suite2p spks.')
+    return data['s2p_spks']
+
+
 def calc_sparse_noise_STAs(preproc_path=None, stimpath=None):
 
     if preproc_path is None:
@@ -48,7 +56,7 @@ def calc_sparse_noise_STAs(preproc_path=None, stimpath=None):
 
     data = read_h5(preproc_path)
 
-    norm_spikes = data['s2p_spks']
+    norm_spikes = get_activity(data)
     stimT = data['stimT']
     twopT = data['twopT']
 
@@ -93,7 +101,7 @@ def calc_sparse_noise_STA_reliability(preproc_path=None, stimpath=None,
     print('  Loading preprocessed data.')
     data = read_h5(preproc_path)
 
-    spikes = data['s2p_spks'] # nCells, nFrames
+    spikes = get_activity(data) # nCells, nFrames
     stimT  = data['stimT']
     twopT  = data['twopT']
 

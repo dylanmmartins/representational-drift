@@ -17,6 +17,7 @@ from files import find, write_h5
 from twop_helpers import read_xml
 from gui_funcs import select_directory
 from reliability import rowwise_corr, shuffle_pvalue
+from activity import load_activity, frame_rate, SOURCES, DEFAULT_SOURCE, LABELS
 
 
 def calc_split_half_reliability(resp, n_shuffles=1000, seed=0):
@@ -47,7 +48,7 @@ def calc_split_half_reliability(resp, n_shuffles=1000, seed=0):
     }
 
 
-def main(mv_dir, time_path=None, n_shuffles=1000):
+def main(mv_dir, time_path=None, n_shuffles=1000, activity_source=DEFAULT_SOURCE):
 
     if time_path is None:
         time_path = find(path=mv_dir, pattern='*_time*.csv', MR=True)
@@ -56,10 +57,8 @@ def main(mv_dir, time_path=None, n_shuffles=1000):
 
     xml_data = read_xml(find(path=mv_dir, pattern='*.xml', MR=True))
 
-    sps = np.load(os.path.join(mv_dir, 'suite2p/plane0/spks.npy'), allow_pickle=True)
-    iscell = np.load(os.path.join(mv_dir, 'suite2p/plane0/iscell.npy'), allow_pickle=True)
-    sps = sps[iscell[:,0].astype(bool)]
     twopT = xml_data['rel_time']
+    sps = load_activity(os.path.join(mv_dir, 'suite2p/plane0'), frame_rate(twopT), source=activity_source)
 
     mv_time = mv_time.sort_values(['repeat', 'movie_frame']).reset_index(drop=True)
     nRep = mv_time['repeat'].nunique()
@@ -88,6 +87,7 @@ def main(mv_dir, time_path=None, n_shuffles=1000):
         'rel_r': rel['r'],
         'rel_p': rel['p'],
         'rel_null': rel['null'],
+        'activity_source': activity_source,
     }
     savepath = os.path.join(mv_dir, 'movie.h5')
     write_h5(savepath, results)
@@ -110,7 +110,7 @@ def main(mv_dir, time_path=None, n_shuffles=1000):
             axs[c,1].plot(movie_time, mean_resp, color='k', lw=0.75)
             axs[c,1].fill_between(movie_time, mean_resp - sem_resp, mean_resp + sem_resp,
                                   color='k', alpha=0.3, lw=0)
-            axs[c,1].set_ylabel('mean spks', fontsize=7)
+            axs[c,1].set_ylabel(LABELS[activity_source], fontsize=7)
 
             for ax in axs[c]:
                 ax.tick_params(labelsize=6)
@@ -132,6 +132,7 @@ if __name__ == '__main__':
     parser.add_argument('--time_path', default=None,
                         help='Movie timestamp csv, if it is not inside --path')
     parser.add_argument('--n_shuffles', type=int, default=1000)
+    parser.add_argument('--activity', choices=SOURCES, default=DEFAULT_SOURCE)
     args = parser.parse_args()
 
     if args.path is None:
@@ -139,4 +140,4 @@ if __name__ == '__main__':
     else:
         usedir = args.path
 
-    main(usedir, time_path=args.time_path, n_shuffles=args.n_shuffles)
+    main(usedir, time_path=args.time_path, n_shuffles=args.n_shuffles, activity_source=args.activity)
