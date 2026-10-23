@@ -12,7 +12,7 @@ import numpy as np
 from scipy.interpolate import interp1d
 from tqdm import tqdm
 
-from sparse_noise import jaccard_topk
+from sparse_noise import jaccard_topk, MAX_STA_LAG
 
 _STIM_CHANNEL = 0
 
@@ -62,6 +62,10 @@ def compute_split_STAs_fast(stimpath, spikes, stim_times, spike_times,
     spike_times = np.asarray(spike_times, dtype=np.float64)
     n_cells = spikes.shape[0]
     eps = 1e-9
+
+    if window > MAX_STA_LAG:
+        print('  STA window {} > max lag {}; using {}.'.format(window, MAX_STA_LAG, MAX_STA_LAG))
+    window = min(int(window), MAX_STA_LAG)
 
     flat, col_means, shape = load_signed_stimulus(stimpath, downsample=downsample)
     n_stim, n_features = flat.shape

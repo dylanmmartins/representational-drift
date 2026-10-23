@@ -64,7 +64,8 @@ def find_stimpath(session_dir):
     return default_stimpath()
 
 
-def main(session_dir, skip_existing=False, n_shuffles=1000, activity_source=DEFAULT_SOURCE):
+def main(session_dir, skip_existing=False, n_shuffles=1000, activity_source=DEFAULT_SOURCE,
+         stimpath=None):
 
     session_dir = os.path.abspath(session_dir)
     rec_dirs = find_recording_dirs(session_dir)
@@ -111,7 +112,8 @@ def main(session_dir, skip_existing=False, n_shuffles=1000, activity_source=DEFA
 
     if 'sparse_noise' in rec_dirs:
         sn_dir = rec_dirs['sparse_noise']
-        sn_cfg = dict(analyze_sparse_noise.cfg, stimpath=find_stimpath(session_dir),
+        sn_cfg = dict(analyze_sparse_noise.cfg,
+                      stimpath=stimpath if stimpath is not None else find_stimpath(session_dir),
                       activity_source=activity_source)
         print('Sparse noise stimulus: {}'.format(sn_cfg['stimpath']))
         run('sparse_noise', os.path.join(sn_dir, 'sparse_noise.h5'),
@@ -139,6 +141,8 @@ if __name__ == '__main__':
     parser.add_argument('--n_shuffles', type=int, default=1000)
     parser.add_argument('--activity', choices=SOURCES, default=DEFAULT_SOURCE,
                         help='omsi_prob: OMSI spike probability; omsi_train: OMSI spike train; s2p: suite2p spks')
+    parser.add_argument('--stimpath', default=None,
+                        help='Sparse noise stimulus .npy (default: sparse_noise_sequence*.npy in the session directory)')
     args = parser.parse_args()
 
     if args.dir is None:
@@ -147,6 +151,6 @@ if __name__ == '__main__':
         session_dir = args.dir
 
     main(session_dir, skip_existing=args.skip_existing, n_shuffles=args.n_shuffles,
-         activity_source=args.activity)
+         activity_source=args.activity, stimpath=args.stimpath)
 
 # python analyze.py --path /your/path/to/the/directory

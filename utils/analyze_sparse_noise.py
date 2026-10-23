@@ -25,6 +25,7 @@ from twop import TwoP
 from twop_helpers import read_xml
 from files import find, write_h5
 from sparse_noise_mapping import calc_sparse_noise_STA_reliability, default_stimpath
+from sparse_noise import MAX_STA_LAG
 from activity import load_activity, SOURCES, DEFAULT_SOURCE
 
 
@@ -39,7 +40,7 @@ cfg = {
     'n_plot_cells': 8,
     'stim_frame_period': 0.5295,
     'stimpath': None,
-    'sta_window': 13,
+    'sta_window': MAX_STA_LAG,
     'sta_downsample': 4,
 }
 

@@ -13,6 +13,8 @@ from scipy.interpolate import interp1d
 from scipy.signal import correlate
 import gc
 
+MAX_STA_LAG = 3
+
 def find_closest_timestamp(arr, t):
     ind = np.nanargmin(np.abs(arr - t))
     return ind, arr[ind]
@@ -162,17 +164,18 @@ def compute_calcium_sta_spatial(
     return sta_all, lag_axis, est_delay_frames
 
 
-def keep_best_STA_lag(STAs):
+def keep_best_STA_lag(STAs, max_lag=MAX_STA_LAG):
 
-    n_cells = np.size(STAs, 0)
+    n_cells, n_lags = np.size(STAs, 0), np.size(STAs, 1)
+    window = n_lags - 1
+    first = max(0, window - min(int(max_lag), MAX_STA_LAG))
     best_lags = np.zeros(n_cells)
     kept_STAs = np.zeros([n_cells, np.size(STAs, 2)])
     for c in range(n_cells):
-        lagmax = np.zeros(np.size(STAs, 1)) * np.nan
-        for l in range(np.size(STAs, 1)):
-            lagmax[l] = np.nanmax(np.abs(STAs[c, l, :]))
-        best_lags[c] = np.nanargmax(lagmax)
-        kept_STAs[c] = STAs[c, int(best_lags[c]), :]
+        lagmax = np.nanmax(np.abs(STAs[c, first:, :]), axis=1)
+        best = first + int(np.nanargmax(lagmax))
+        best_lags[c] = window - best
+        kept_STAs[c] = STAs[c, best, :]
     return kept_STAs, best_lags
 
 
@@ -181,7 +184,7 @@ def compute_split_STAs(
         spikes,
         stim_times,
         spike_times,
-        window=13,
+        window=MAX_STA_LAG,
         delay=None
 ):
 

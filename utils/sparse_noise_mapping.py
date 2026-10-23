@@ -12,7 +12,7 @@ DMM, March 2026
 import os
 from gui_funcs import select_file
 from files import read_h5, write_h5
-from sparse_noise import compute_calcium_sta_spatial, compute_split_STAs
+from sparse_noise import compute_calcium_sta_spatial, compute_split_STAs, MAX_STA_LAG
 from sparse_noise_fast import compute_split_STAs_fast
 import argparse
 import numpy as np
@@ -87,7 +87,7 @@ def calc_sparse_noise_STAs(preproc_path=None, stimpath=None):
 
 
 def calc_sparse_noise_STA_reliability(preproc_path=None, stimpath=None,
-                                       window=13, downsample=4):
+                                       window=MAX_STA_LAG, downsample=4):
 
     if preproc_path is None:
         preproc_path = select_file(
