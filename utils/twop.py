@@ -25,6 +25,7 @@ except ModuleNotFoundError:
     _oasis_available = False
 
 from files import write_h5
+import OMSI
 
 
 class TwoP():
@@ -268,62 +269,18 @@ class TwoP():
         return recording_props
 
 
-OMSI_ENV = 'spikeinf'
-
-
-def run_omsi(raw_F, raw_Fneu, fs, env=OMSI_ENV, f_corr=0.7, timeout_s=None):
-
-    import tempfile, subprocess, os as _os
+def run_omsi(raw_F, raw_Fneu, fs, f_corr=0.7):
 
     f_arr    = np.ascontiguousarray(np.atleast_2d(raw_F),    dtype=np.float32)
     fneu_arr = np.ascontiguousarray(np.atleast_2d(raw_Fneu), dtype=np.float32)
     if not np.isfinite(fs) or fs <= 0:
         raise ValueError(f'run_omsi needs a positive frame rate, got {fs!r}')
 
-    with tempfile.TemporaryDirectory() as tmpdir:
-        f_path    = _os.path.join(tmpdir, 'f.npy')
-        fneu_path = _os.path.join(tmpdir, 'fneu.npy')
-        spk_path  = _os.path.join(tmpdir, 'spikes.npy')
-        prob_path = _os.path.join(tmpdir, 'prob.npy')
-        np.save(f_path, f_arr)
-        np.save(fneu_path, fneu_arr)
+    r = OMSI.deconv_from_array(f=f_arr, fneu=fneu_arr, hz=fs, f_corr=f_corr)
 
-        script = "\n".join([
-            "import numpy as np, OMSI",
-            "f    = np.load({})".format(repr(f_path)),
-            "fneu = np.load({})".format(repr(fneu_path)),
-            "r = OMSI.deconv_from_array(f=f, fneu=fneu, hz={}, f_corr={})".format(
-                float(fs), float(f_corr)),
-            "sp = [np.asarray(x, dtype=float).ravel() for x in r['spikes']]",
-            "n = max((s.size for s in sp), default=1)",
-            "out = np.full((len(sp), n), np.nan)",
-            "for i, s in enumerate(sp): out[i, :s.size] = s",
-            "np.save({}, out)".format(repr(spk_path)),
-            "np.save({}, np.asarray(r['prob_trace'], dtype=np.float32))".format(
-                repr(prob_path)),
-        ])
+    prob = r['prob_trace']
+    spike_times = r['spikes']
 
-        try:
-            result = subprocess.run(
-                ['conda', 'run', '-n', env, 'python', '-c', script],
-                timeout=timeout_s,
-            )
-        except FileNotFoundError:
-            print('  OMSI: conda not on PATH -- skipping (env {!r})'.format(env))
-            return {'spike_times': None, 'prob_trace': None}
-        except subprocess.TimeoutExpired:
-            print('  OMSI: timed out after {} s -- skipping'.format(timeout_s))
-            return {'spike_times': None, 'prob_trace': None}
-
-        if result.returncode != 0 or not _os.path.isfile(spk_path):
-            print('  OMSI: subprocess failed (returncode {}) '
-                  '-- see output above'.format(result.returncode))
-            return {'spike_times': None, 'prob_trace': None}
-
-        padded = np.load(spk_path)
-        prob   = np.load(prob_path) if _os.path.isfile(prob_path) else None
-
-    spike_times = [row[np.isfinite(row)] for row in padded]
     return {'spike_times': spike_times, 'prob_trace': prob}
 
 

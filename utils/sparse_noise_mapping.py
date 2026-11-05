@@ -27,7 +27,7 @@ def default_stimpath():
     if os_name == 'Linux':
         return '/home/dylan/Fast2/repdrift/sparse_noise_sequence_v10.npy'
     elif os_name == 'Windows':
-        return r'J:\sparse_noise\sparse_noise_sequence_v7.npy'
+        return r'C:\Users\lindsey_washiashi\Desktop\Lindsey_local\sparse_noise_sequence_v10.npy'
 
 
 def get_activity(data):

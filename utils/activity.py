@@ -14,7 +14,7 @@ DMM, October 2026
 import os
 import numpy as np
 
-from twop import run_omsi, OMSI_ENV
+from twop import run_omsi
 
 
 SOURCES = ('omsi_prob', 'omsi_train', 's2p')
@@ -51,7 +51,7 @@ def spike_times_to_train(spike_times, n_frames, fs):
     return train
 
 
-def run_omsi_cached(plane_dir, F, Fneu, usecells, fs, neu_correction=0.7, env=OMSI_ENV):
+def run_omsi_cached(plane_dir, F, Fneu, usecells, fs, neu_correction=0.7):
 
     cache_path = os.path.join(plane_dir, CACHE_NAME)
     if os.path.isfile(cache_path):
@@ -65,7 +65,7 @@ def run_omsi_cached(plane_dir, F, Fneu, usecells, fs, neu_correction=0.7, env=OM
         print('  Cached OMSI output {} does not match this recording; rerunning.'.format(cache_path))
 
     print('  OMSI spike inference on {} cells at {:.3f} Hz...'.format(np.size(F, 0), fs))
-    omsi = run_omsi(F, Fneu, fs, env=env, f_corr=neu_correction)
+    omsi = run_omsi(F, Fneu, fs, f_corr=neu_correction)
     if omsi['spike_times'] is None or omsi['prob_trace'] is None:
         raise RuntimeError('OMSI failed on {}'.format(plane_dir))
 
@@ -78,7 +78,7 @@ def run_omsi_cached(plane_dir, F, Fneu, usecells, fs, neu_correction=0.7, env=OM
     return prob_trace, spike_times
 
 
-def load_activity(plane_dir, fs, source=DEFAULT_SOURCE, neu_correction=0.7, omsi_env=OMSI_ENV):
+def load_activity(plane_dir, fs, source=DEFAULT_SOURCE, neu_correction=0.7):
 
     if source not in SOURCES:
         raise ValueError('activity source must be one of {}, got {!r}'.format(SOURCES, source))
@@ -94,7 +94,7 @@ def load_activity(plane_dir, fs, source=DEFAULT_SOURCE, neu_correction=0.7, omsi
     Fneu = np.load(os.path.join(plane_dir, 'Fneu.npy'), allow_pickle=True)[usecells]
 
     prob_trace, spike_times = run_omsi_cached(
-        plane_dir, F, Fneu, usecells, fs, neu_correction=neu_correction, env=omsi_env)
+        plane_dir, F, Fneu, usecells, fs, neu_correction=neu_correction)
 
     if source == 'omsi_prob':
         return prob_trace * fs
