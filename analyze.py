@@ -141,7 +141,7 @@ if __name__ == '__main__':
     parser.add_argument('--n_shuffles', type=int, default=1000)
     parser.add_argument('--activity', choices=SOURCES, default=DEFAULT_SOURCE,
                         help='omsi_prob: OMSI spike probability; omsi_train: OMSI spike train; s2p: suite2p spks')
-    parser.add_argument('--stimpath', default='/home/dylan/Fast2/repdrift/sparse_noise_sequence_v11.npy',
+    parser.add_argument('--stimpath', default=None,
                         help='Sparse noise stimulus .npy')
     args = parser.parse_args()
 

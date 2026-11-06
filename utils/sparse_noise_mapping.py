@@ -48,9 +48,9 @@ def calc_sparse_noise_STAs(preproc_path=None, stimpath=None):
 
     if stimpath is None:
         if os_name == "Linux":
-            stimpath = '/home/dylan/Fast2/sparse_noise/sparse_noise_sequence_v7.npy'
+            stimpath = '/home/dylan/Fast2/repdrift/sparse_noise_sequence_v10.npy'
         elif os_name == "Windows":
-            stimpath = r'J:\sparse_noise\sparse_noise_sequence_v7.npy'
+            stimpath = r'C:\Users\lindsey_washiashi\Desktop\Lindsey_local\sparse_noise_sequence_v10.npy'
 
     stimulus = np.load(stimpath)[:,:,:,0]
 
