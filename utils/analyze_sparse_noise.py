@@ -34,7 +34,6 @@ cfg = {
     'cell_sd_thresh': 2,
     'neu_correction': 0.7,
     'activity_source': DEFAULT_SOURCE,
-    'omsi_env': 'spikeinf',
     'stimT_patterns': ['*sparsenoise.csv', 'sparse_noise_timestamps_*.csv', 'sparse_noise_time*.txt'],
     'stimT_columns': ['psychopy_time', 'stim_onset_clock', 'onset_s'],
     'n_plot_cells': 8,
@@ -184,8 +183,7 @@ def main(rpath, cfg=cfg):
     preprocessed_dict['activity'] = load_activity(
         os.path.dirname(F_path), _fs,
         source=cfg['activity_source'],
-        neu_correction=cfg['neu_correction'],
-        omsi_env=cfg['omsi_env']
+        neu_correction=cfg['neu_correction']
     )
     preprocessed_dict['activity_source'] = cfg['activity_source']
 
